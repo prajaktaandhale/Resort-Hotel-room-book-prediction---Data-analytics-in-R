@@ -1,0 +1,207 @@
+---
+title: "Project Tips and Outline"
+author: "Prajakta Andhale"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+## Data Preparation
+```{r}
+#Downloading Packages
+library(dplyr)
+library(tidyverse)
+library(knitr)
+```
+```{r}
+#Importing hotels.csv file
+hotels<-read.csv("hotels.csv",header= TRUE)
+```
+
+# Training dataset
+```{r}
+hotel.training <- sample_n(hotels,170)
+write.csv(hotel.training,"hotel.training.csv",row.names=F)
+```
+# Testing dataset
+```{r}
+hotel.testing <- setdiff(hotels,hotel.training)
+write.csv(hotel.testing,"hotel.testing.csv",row.names=F)
+```
+
+Once you obtain the training and testing data sets, make sure you export and save them in your local machine. Then import the saved data sets to R, and work on the project problems. Do not re-generate random samples, because each time you take a sample, the data set changes (randomly!). So you only need to get a random sample once.
+
+```{r}
+#Importing the training dataset
+hotel.training<-read.csv("hotel.training.csv",header=TRUE)
+```
+
+
+## Data Exploration 
+
+### Problem 1
+
+This problem asks to find the number of hotels that position or market themselves as family-styled or business oriented.Also to find whether there is a significant difference in room book between family-styled and business-oriented and finally a side by side box plot.
+
+```{r}
+#Converting the integer type Positioning variable to factor
+hotel.training <- mutate(hotel.training, Positioning = as.factor(Positioning)) 
+levels(hotel.training$Positioning) <- c("family-styled","business-oriented")
+```
+
+```{r}
+#Number of family-styled and business-oriented hotels
+tb <- hotel.training %>% group_by(Positioning) %>% summarize( size = length(Room.Book))
+tb
+```
+There are 70 family-styled and 100 business-oriented hotels out of 170 in the training data set.
+
+```{r}
+#To test whether there is significant difference in room-book between hotels of different positioning.
+significance <- t.test(Room.Book ~ Positioning, data=hotel.training, var.equal = TRUE)
+significance
+```
+The value of p is `r significance$p.value` which is greater than 0.05. So there is no significant difference in room book between hotels who are marketed as family-styled and business-oriented which means that room bookings doesn't depend on the type of hotel.
+
+```{r, fig.height= 3, fig.width= 5}
+# When inserting figures, you can adjust the size of the figures by changing the values assigned to the "fig.height" and the "fig.width".
+ggplot(hotel.training, aes(x = Positioning, y = Room.Book)) + geom_boxplot(fill = "#56B4E9" ) + labs(title="Room.Book by Positioning",                                                     x="Positioning",y="Room.Book")
+```
+The above side by side box plot shows the room bookings of family-styled and business-oriented hotels.
+
+### Problem 2
+```{r}
+# Calculates the age of hotels in 2021
+age.data <- data.frame(age = c(2021- hotel.training$Year))
+```
+
+```{r}
+# Mean,Standard Deviation,maximu,minimum of age variable
+stats<-summarise(age.data,mean.age=mean(age),
+                 sd.age=sd(age),
+                 maximum.age=max(age),
+                 minimum.age=min(age))
+kable(stats,digits=c(2,2,0,0))
+```
+The mean and standard deviation of the age variable are `r stats$mean` and `r stats$sd`. The oldest hotel is `r stats$maximum` years of age and the most recent started `r stats$minimum` years ago.
+
+```{r}
+# Histogram for age variable
+age.hist <- ggplot(age.data, aes(x=age)) + geom_histogram()
+age.hist
+```
+The above histogram shows the age of hotels. Majority of hotels are of age 1 to 4 and 5 to 9.
+
+## Regression Modeling and Interpretations 
+
+### Problem 3
+```{r}
+# Regression Model with Room.Book as the response variable and Year,Shuttle,Price,Ads,View,Food,Positioning as explanatory variables.
+reg.model<-lm(Room.Book~Year+Shuttle+Price+Ads+View+Food+Rating+Positioning,data=hotel.training)
+reg.model
+```
+
+```{r}
+# To view the detailed results of the regression model
+reg.model.results<-summary(reg.model)
+reg.model.results
+```
+The above results give the p-value of the F-statistic,r-square,adjusted r-square and the estimated coefficients.
+The p-value of the F-statistic is less than 0.05 and hence the overall model is significant.
+
+```{r}
+# To extract the coefficients table
+reg.model.coef <- reg.model.results$coefficients
+reg.model.coef
+```
+
+The explanatory variables Year, Shuttle,Price,Food and positioning have p-values of `r reg.model.coef[2,4]`, `r reg.model.coef[3,4]`, `r reg.model.coef[4,4]`, `r reg.model.coef[7,4]`, `r reg.model.coef[9,4]` respectively which are greater than 0.05 and hence are not significant predictors of room book variable. So these variables must be removed and the regression model must be run again with only the Ads, View and Rating variable.
+
+#UPDATED REGRESSION MODEL
+```{r}
+reg.model.updated <- lm(Room.Book ~ Ads + View + Rating, data = hotel.training)
+reg.model.updated
+```
+
+```{r}
+#To view detailed results of the updated regression model
+reg.model.updated.results <- summary(reg.model.updated)
+reg.model.updated.results
+```
+
+### Problem 4
+
+# Interpreting the regression results
+
+#Step 1 : Interpreting the overall model
+The p-value of the f-statistic is 2.2e-16 which is less than 0.05 and hence is highly significant. The overall regression model is significant which means the explanatory variables are significantly related to the response variable.
+
+#Step 2: Interpret the regression coefficients
+```{r}
+#To extract the coefficients table from results
+updated.coef<-reg.model.updated.results$coefficients
+updated.coef
+```
+```{r}
+#To present the coefficients table nicely
+kable(updated.coef, digits = c(3, 3, 3, 5))
+```
+#Interpreting p-values 
+The p-values of Ads, View, Rating are `r updated.coef[2,4]`, `r updated.coef[3,4]` and `r updated.coef[4,4]` respectively which are less than 0.05 and so are the significant predictors of room book variable.
+
+#Interpreting beta coefficients
+Assuming that we have View and Rating constant, with the increase in advertising expenditure by $1000 the room booking also increases by `r updated.coef[2,1]`.
+
+Assuming that we have Ads and Rating constant,with an increase in number of ocean view rooms the room booking increases by `r updated.coef[3,1]`.
+
+Assuming that we have Ads and View constant, with an increase in Rating the room booking will increase by `r updated.coef[4,1]`.
+
+#Step 3 : Estimated Regression Equation
+
+Room.Book = -25.683 + 0.087 * Ads + 3.392 * View + 10.60 * Rating
+
+#Step 4 : Assessing the model
+
+The value of r-squared is `r reg.model.updated.results$r.squared`.
+So we now know the variance of room booking that can be predicted by Ads,View and Rating.
+
+
+With an increase in advertising expenditure the booking will also get increased. The hotels must increase their advertising.
+The greater the number of sea facing rooms greater is the room bookings will occur.
+Guests are also likely to increase if the rating of hotel is high. Hence all the amenities must be provided so that the guests who visited give a higher rating.
+
+## Prediction and Validation  
+
+### Problem 5
+```{r}
+#Reading the testing data
+hotel.testing<-read.csv("hotel.testing.csv",header=TRUE)
+```
+
+```{r}
+#Predicting the values of Room.Book with Ads,View and Rating as explanatory variables
+reg.model.updated<-lm(Room.Book~Ads+View+Rating,data=hotel.training)
+predicted.roombook<-predict(reg.model.updated,data.frame(hotel.testing))
+predicted.roombook
+```
+
+```{r}
+#A data fraem with ID and the predicted room book based on the regression model.
+tb2<-data.frame(ID=hotel.testing$ID,room.book=predicted.roombook)
+head(arrange(tb2,desc(room.book)),10)
+```
+The above data frame shows the predicted top 10 hotels with highest number of room bookings.
+
+### Problem 6
+```{r}
+#Validating sorted predicted room booking using observed data
+tb3<-data.frame(ID=hotel.testing$ID,Room.Book=hotel.testing$Room.Book)
+head(arrange(tb3,desc(Room.Book)),10)
+```
+We can observe that the predicted values are correct. Hence proved.
+
+
+
